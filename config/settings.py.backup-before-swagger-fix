@@ -1,0 +1,241 @@
+from pathlib import Path
+import os
+from datetime import timedelta
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
+
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'unsafe-dev-key')
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',') if h.strip()]
+CSRF_TRUSTED_ORIGINS = [h.strip() for h in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if h.strip()]
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
+    'api.auth',
+    'api.wallets',
+    'api.deposits',
+    'api.subscriptions',
+    'api.withdrawals',
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'config.urls'
+TEMPLATES = [{
+    'BACKEND': 'django.template.backends.django.DjangoTemplates',
+    'DIRS': [BASE_DIR / 'templates'],
+    'APP_DIRS': True,
+    'OPTIONS': {'context_processors': [
+        'django.template.context_processors.request',
+        'django.contrib.auth.context_processors.auth',
+        'django.contrib.messages.context_processors.messages',
+    ]},
+}]
+WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / os.getenv('DATABASE_PATH', 'db.sqlite3'),
+        'OPTIONS': {'timeout': 30},
+    }
+}
+
+AUTH_USER_MODEL = 'auth.User'
+AUTH_PASSWORD_VALIDATORS = []
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'UTC'
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {'anon': '20/min', 'user': '120/min'},
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_MINUTES', '30'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_DAYS', '7'))),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'UPDATE_LAST_LOGIN': True,
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "AkaGiftBot Wallet & Deposit API",
+    "DESCRIPTION": """
+# AkaGiftBot Wallet API
+
+REST API for Google authentication, user accounts, dedicated BNB Smart Chain
+deposit wallets, USDT BEP-20 deposit detection, transaction history and
+automatic deposit collection.
+
+## Authentication
+
+Most endpoints require a JWT access token.
+
+Use the **Authorize** button in Swagger and enter:
+
+`Bearer <access_token>`
+
+## Authentication flow
+
+1. Obtain a Google ID token from Google Sign-In.
+2. Send it to `POST /api/v1/auth/google/`.
+3. Receive JWT access and refresh tokens.
+4. Use the access token with protected endpoints.
+5. Refresh the access token with `POST /api/v1/auth/token/refresh/`.
+
+## Wallet flow
+
+Each authenticated user receives a dedicated BNB Smart Chain deposit address.
+
+USDT BEP-20 deposits are detected by the blockchain monitor and processed
+according to the configured confirmation policy.
+
+After confirmation, the deposit can be collected from the user's deposit
+wallet toward the central wallet.
+
+## Deposit status
+
+- `detected` — blockchain transaction discovered.
+- `confirmed` — required confirmations reached.
+- `processing` — collection is being performed.
+- `collected` — collection transaction submitted successfully.
+- `failed` — processing failed.
+
+## Transaction types
+
+- `deposit` — incoming USDT deposit.
+- `sweep` — USDT collection toward the central wallet.
+- `gas_topup` — BNB gas funding for a user wallet.
+
+## Network
+
+Current supported network:
+
+**BNB Smart Chain (BSC)**
+
+Current supported deposit asset:
+
+**USDT BEP-20**
+""",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+
+    "SCHEMA_PATH_PREFIX": r"/api/v[0-9]",
+
+    "TAGS": [
+        {
+            "name": "Authentication",
+            "description": "Google authentication and JWT token management.",
+        },
+        {
+            "name": "Users",
+            "description": "Authenticated user profile operations.",
+        },
+        {
+            "name": "Wallets",
+            "description": "Dedicated user blockchain deposit wallets.",
+        },
+        {
+            "name": "Deposits",
+            "description": "USDT BEP-20 deposits and confirmation status.",
+        },
+        {
+            "name": "Transactions",
+            "description": "Blockchain transaction history.",
+        },
+    ],
+
+    "SWAGGER_UI_SETTINGS": {
+        "persistAuthorization": True,
+        "displayOperationId": True,
+        "filter": True,
+        "deepLinking": True,
+        "displayRequestDuration": True,
+        "tryItOutEnabled": True,
+    },
+
+    "SECURITY": [
+        {
+            "bearerAuth": [],
+        }
+    ],
+}
+
+
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
+BSC_RPC_URL = os.getenv('BSC_RPC_URL', '')
+BSC_CHAIN_ID = int(os.getenv('BSC_CHAIN_ID', '56'))
+USDT_CONTRACT_ADDRESS = os.getenv('USDT_CONTRACT_ADDRESS', '0x55d398326f99059fF775485246999027B3197955')
+USDT_DECIMALS = int(os.getenv('USDT_DECIMALS', '18'))
+CONFIRMATIONS_REQUIRED = int(os.getenv('CONFIRMATIONS_REQUIRED', '12'))
+BLOCK_SCAN_BATCH = int(os.getenv('BLOCK_SCAN_BATCH', '200'))
+POLL_SECONDS = int(os.getenv('POLL_SECONDS', '8'))
+WALLET_MNEMONIC = os.getenv('WALLET_MNEMONIC', '')
+WALLET_PASSPHRASE = os.getenv('WALLET_PASSPHRASE', '')
+CENTRAL_WALLET_INDEX = int(os.getenv('CENTRAL_WALLET_INDEX', '0'))
+AUTO_GAS_TOPUP = os.getenv('AUTO_GAS_TOPUP', 'true').lower() == 'true'
+GAS_TOPUP_BNB = os.getenv('GAS_TOPUP_BNB', '0.0003')
+MIN_USER_BNB = os.getenv('MIN_USER_BNB', '0.00005')
+
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'false').lower() == 'true'
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'false').lower() == 'true'
+#SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {'verbose': {'format': '{levelname} {asctime} {name} {message}', 'style': '{'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'verbose'}},
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': 'INFO'},
+        'api': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}

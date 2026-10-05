@@ -1,0 +1,16 @@
+[Unit]
+Description=AkaGiftBot Django API
+After=network.target
+
+[Service]
+Type=simple
+User=akagiftbot
+Group=akagiftbot
+WorkingDirectory=/opt/akagiftbot
+EnvironmentFile=/opt/akagiftbot/.env
+ExecStart=/opt/akagiftbot/.venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

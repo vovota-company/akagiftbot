@@ -1,0 +1,814 @@
+openapi: 3.0.3
+info:
+  title: AkaGiftBot Wallet & Deposit API
+  version: 1.0.0
+  description: |2
+
+    # AkaGiftBot Wallet API
+
+    REST API for Google authentication, user accounts, dedicated BNB Smart Chain
+    deposit wallets, USDT BEP-20 deposit detection, transaction history and
+    automatic deposit collection.
+
+    ## Authentication
+
+    Most endpoints require a JWT access token.
+
+    Use the **Authorize** button in Swagger and enter:
+
+    `Bearer <access_token>`
+
+    ## Authentication flow
+
+    1. Obtain a Google ID token from Google Sign-In.
+    2. Send it to `POST /api/v1/auth/google/`.
+    3. Receive JWT access and refresh tokens.
+    4. Use the access token with protected endpoints.
+    5. Refresh the access token with `POST /api/v1/auth/token/refresh/`.
+
+    ## Wallet flow
+
+    Each authenticated user receives a dedicated BNB Smart Chain deposit address.
+
+    USDT BEP-20 deposits are detected by the blockchain monitor and processed
+    according to the configured confirmation policy.
+
+    After confirmation, the deposit can be collected from the user's deposit
+    wallet toward the central wallet.
+
+    ## Deposit status
+
+    - `detected` — blockchain transaction discovered.
+    - `confirmed` — required confirmations reached.
+    - `processing` — collection is being performed.
+    - `collected` — collection transaction submitted successfully.
+    - `failed` — processing failed.
+
+    ## Transaction types
+
+    - `deposit` — incoming USDT deposit.
+    - `sweep` — USDT collection toward the central wallet.
+    - `gas_topup` — BNB gas funding for a user wallet.
+
+    ## Network
+
+    Current supported network:
+
+    **BNB Smart Chain (BSC)**
+
+    Current supported deposit asset:
+
+    **USDT BEP-20**
+paths:
+  /api/v1/auth/google/:
+    post:
+      operationId: googleLogin
+      description: |-
+        Authenticate a user using a Google OpenID Connect ID token. The backend verifies the token with Google, validates that the email is verified, and uses the verified email as the account identity. No application password is accepted or stored.
+
+        If the email does not already exist, a new user and dedicated BNB Smart Chain deposit wallet are created automatically.
+      summary: Login or register with Google
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+            examples:
+              GoogleLoginRequest:
+                value:
+                  id_token: eyJhbGciOiJSUzI1NiIs...
+                summary: Google login request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleLoginResponse'
+              examples:
+                SuccessfulResponse:
+                  value:
+                    access: eyJhbGciOiJIUzI1NiIs...
+                    refresh: eyJhbGciOiJIUzI1NiIs...
+                    user:
+                      id: 1
+                      email: user@gmail.com
+                      first_name: John
+                      last_name: Doe
+                      date_joined: '2026-09-28T12:00:00Z'
+                    wallet:
+                      address: '0x1234567890abcdef1234567890abcdef12345678'
+                      network: bsc
+                      status: active
+                  summary: Successful response
+          description: Google authentication succeeded.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request validation failed.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Google token is invalid, expired, or unverified.
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: refreshAccessToken
+      description: Submit a valid refresh token to obtain a new JWT access token.
+        The refresh token itself remains valid according to the configured JWT lifetime.
+      summary: Refresh JWT access token
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+            examples:
+              RefreshRequest:
+                value:
+                  refresh: eyJhbGciOiJIUzI1NiIs...
+                summary: Refresh request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+              examples:
+                RefreshResponse:
+                  value:
+                    access: eyJhbGciOiJIUzI1NiIs...
+                  summary: Refresh response
+          description: A new access token was generated.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The refresh token is invalid or expired.
+  /api/v1/balance/:
+    get:
+      operationId: getBalance
+      description: Returns the authenticated user's available USDT balance. Pending
+        and processing withdrawals are excluded from the available amount.
+      summary: Get available USDT balance
+      tags:
+      - Withdrawals
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+          description: ''
+  /api/v1/deposits/:
+    get:
+      operationId: deposits_list
+      description: List blockchain deposits belonging to the authenticated user.
+      tags:
+      - deposits
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+          description: ''
+  /api/v1/me/:
+    get:
+      operationId: getCurrentUser
+      description: Returns the profile associated with the JWT access token. Authentication
+        is required.
+      summary: Get authenticated user
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: Authenticated user's profile.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Authentication credentials were not provided or are invalid.
+  /api/v1/transactions/:
+    get:
+      operationId: transactions_list
+      description: List all blockchain transactions belonging to the authenticated
+        user.
+      tags:
+      - transactions
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+          description: ''
+  /api/v1/wallet/:
+    get:
+      operationId: getUserWallet
+      description: |-
+        Returns the dedicated BNB Smart Chain deposit wallet assigned to the authenticated user.
+
+        A wallet is automatically created if the authenticated user does not already have one.
+
+        The returned address can be used to receive supported USDT BEP-20 deposits.
+      summary: Get user's deposit wallet
+      tags:
+      - Wallets
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wallet'
+          description: User's dedicated deposit wallet.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+  /api/v1/withdrawals/:
+    get:
+      operationId: listWithdrawals
+      description: Returns withdrawal requests belonging only to the authenticated
+        user.
+      summary: List user's withdrawals
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - completed
+          - failed
+          - pending
+          - processing
+        description: Filter withdrawals by processing status.
+      tags:
+      - Withdrawals
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Withdrawal'
+          description: ''
+    post:
+      operationId: createWithdrawal
+      description: |-
+        Creates a USDT withdrawal from the user's available balance to an external BNB Smart Chain wallet.
+
+        The destination must be a valid EVM/BSC address.
+
+        The request requires an idempotency key so retrying the same request does not accidentally create a second withdrawal.
+
+        The actual blockchain transaction is sent from the central wallet, not from the user's deposit wallet.
+
+        The response contains the blockchain transaction hash when the transfer has completed successfully.
+      summary: Withdraw USDT to an external BSC wallet
+      tags:
+      - Withdrawals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalCreate'
+            examples:
+              USDTWithdrawal:
+                value:
+                  amount: '25.00'
+                  destination_address: '0x1234567890abcdef1234567890abcdef12345678'
+                  idempotency_key: withdrawal-2026-000001
+                summary: USDT withdrawal
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WithdrawalCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WithdrawalCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+              examples:
+                SuccessfulWithdrawal:
+                  value:
+                    id: 1
+                    asset: USDT
+                    network: bsc
+                    amount: '25.000000000000000000'
+                    fee: '0.000000000000000000'
+                    destination_address: '0x1234567890abcdef1234567890abcdef12345678'
+                    status: completed
+                    tx_hash: 0xabcdef...
+                    idempotency_key: withdrawal-2026-000001
+                    error_message: ''
+                    created_at: '2026-09-28T12:00:00Z'
+                    updated_at: '2026-09-28T12:00:10Z'
+                    completed_at: '2026-09-28T12:00:10Z'
+                  summary: Successful withdrawal
+          description: Withdrawal created and processed successfully.
+        '400':
+          description: Invalid address, amount, balance, or request.
+        '409':
+          description: Withdrawal could not be created because the idempotency key
+            conflicts.
+  /api/v1/withdrawals/{id}/:
+    get:
+      operationId: getWithdrawal
+      description: Returns one withdrawal belonging to the authenticated user.
+      summary: Get withdrawal details
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Withdrawals
+      security:
+      - jwtAuth: []
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+          description: ''
+        '404':
+          description: Withdrawal does not exist.
+components:
+  schemas:
+    AssetEnum:
+      enum:
+      - USDT
+      type: string
+      description: '* `USDT` - USDT'
+    Balance:
+      type: object
+      properties:
+        asset:
+          type: string
+        network:
+          type: string
+        available:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+        pending_withdrawals:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+      required:
+      - asset
+      - available
+      - network
+      - pending_withdrawals
+    ErrorResponse:
+      type: object
+      description: Generic API error response.
+      properties:
+        detail:
+          type: string
+          readOnly: true
+          description: Human-readable error message.
+      required:
+      - detail
+    GoogleLoginRequest:
+      type: object
+      description: Request body for Google authentication.
+      properties:
+        id_token:
+          type: string
+          writeOnly: true
+          description: Google OAuth 2.0 / OpenID Connect ID token obtained from the
+            Google Sign-In flow.
+      required:
+      - id_token
+    GoogleLoginResponse:
+      type: object
+      description: Successful Google authentication response.
+      properties:
+        access:
+          type: string
+          readOnly: true
+          description: JWT access token used to authenticate API requests.
+        refresh:
+          type: string
+          readOnly: true
+          description: JWT refresh token used to obtain a new access token.
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+          description: Authenticated user.
+        wallet:
+          allOf:
+          - $ref: '#/components/schemas/WalletSummary'
+          readOnly: true
+          description: Dedicated deposit wallet automatically assigned to the user.
+      required:
+      - access
+      - refresh
+      - user
+      - wallet
+    NetworkEnum:
+      enum:
+      - bsc
+      type: string
+      description: '* `bsc` - BNB Smart Chain'
+    TokenRefreshRequest:
+      type: object
+      description: Request body for refreshing a JWT access token.
+      properties:
+        refresh:
+          type: string
+          writeOnly: true
+          description: Valid JWT refresh token.
+      required:
+      - refresh
+    TokenRefreshResponse:
+      type: object
+      description: Successful JWT refresh response.
+      properties:
+        access:
+          type: string
+          readOnly: true
+          description: New JWT access token.
+      required:
+      - access
+    Transaction:
+      type: object
+      description: Blockchain transaction/deposit representation.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          description: Internal transaction identifier.
+        type:
+          allOf:
+          - $ref: '#/components/schemas/TypeEnum'
+          readOnly: true
+          description: |-
+            Transaction type: deposit, sweep, or gas_topup.
+
+            * `deposit` - Deposit
+            * `sweep` - Sweep
+            * `gas_topup` - Gas top-up
+        asset:
+          type: string
+          readOnly: true
+          description: Blockchain asset involved in the transaction, normally USDT.
+        network:
+          type: string
+          readOnly: true
+          description: Blockchain network, currently BSC.
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          readOnly: true
+          description: Transaction amount in the asset's native decimal representation.
+        fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          readOnly: true
+          description: Recorded transaction fee.
+        tx_hash:
+          type: string
+          readOnly: true
+          description: Blockchain transaction hash of the original transaction.
+        block_number:
+          type: integer
+          readOnly: true
+          description: BSC block containing the transaction.
+        confirmations:
+          type: integer
+          readOnly: true
+          description: Number of blockchain confirmations currently observed.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TransactionStatusEnum'
+          readOnly: true
+          description: |-
+            Deposit processing status: detected, confirmed, processing, collected, or failed.
+
+            * `detected` - Detected
+            * `confirmed` - Confirmed
+            * `processing` - Processing
+            * `collected` - Collected
+            * `failed` - Failed
+        collected_tx_hash:
+          type: string
+          readOnly: true
+          description: Transaction hash of the USDT sweep from the user's deposit
+            wallet to the central wallet. Empty until collection occurs.
+        error_message:
+          type: string
+          readOnly: true
+          description: Processing error message when the transaction enters failed
+            status.
+        detected_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: UTC timestamp when the blockchain transaction was detected.
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: UTC timestamp when the transaction record was last updated.
+      required:
+      - amount
+      - asset
+      - block_number
+      - collected_tx_hash
+      - confirmations
+      - detected_at
+      - error_message
+      - fee
+      - id
+      - network
+      - status
+      - tx_hash
+      - type
+      - updated_at
+    TransactionStatusEnum:
+      enum:
+      - detected
+      - confirmed
+      - processing
+      - collected
+      - failed
+      type: string
+      description: |-
+        * `detected` - Detected
+        * `confirmed` - Confirmed
+        * `processing` - Processing
+        * `collected` - Collected
+        * `failed` - Failed
+    TypeEnum:
+      enum:
+      - deposit
+      - sweep
+      - gas_topup
+      type: string
+      description: |-
+        * `deposit` - Deposit
+        * `sweep` - Sweep
+        * `gas_topup` - Gas top-up
+    User:
+      type: object
+      description: Public authenticated-user representation.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date_joined
+      - email
+      - first_name
+      - id
+      - last_name
+    Wallet:
+      type: object
+      description: Dedicated deposit wallet belonging to the authenticated user.
+      properties:
+        network:
+          type: string
+          readOnly: true
+          description: Blockchain network. Currently BNB Smart Chain (BSC).
+        address:
+          type: string
+          readOnly: true
+          description: Checksummed BSC address assigned to the authenticated user.
+            This is the address to which USDT BEP-20 deposits should be sent.
+        status:
+          type: string
+          readOnly: true
+          description: 'Wallet operational status. Possible values: active, paused.'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: UTC timestamp when the wallet was created.
+      required:
+      - address
+      - created_at
+      - network
+      - status
+    WalletSummary:
+      type: object
+      description: Wallet information returned during authentication.
+      properties:
+        address:
+          type: string
+          readOnly: true
+          description: User's dedicated BNB Smart Chain deposit address.
+        network:
+          type: string
+          readOnly: true
+          description: Blockchain network used by the wallet.
+        status:
+          type: string
+          readOnly: true
+          description: Current wallet status.
+      required:
+      - address
+      - network
+      - status
+    Withdrawal:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        asset:
+          allOf:
+          - $ref: '#/components/schemas/AssetEnum'
+          readOnly: true
+        network:
+          allOf:
+          - $ref: '#/components/schemas/NetworkEnum'
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+        fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          readOnly: true
+        destination_address:
+          type: string
+          maxLength: 42
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WithdrawalStatusEnum'
+          readOnly: true
+        tx_hash:
+          type: string
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+        error_message:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - amount
+      - asset
+      - completed_at
+      - created_at
+      - destination_address
+      - error_message
+      - fee
+      - id
+      - idempotency_key
+      - network
+      - status
+      - tx_hash
+      - updated_at
+    WithdrawalCreate:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          description: Amount of USDT to withdraw.
+        destination_address:
+          type: string
+          description: Destination BNB Smart Chain wallet address. Must be a valid
+            EVM/BSC address.
+          maxLength: 42
+        idempotency_key:
+          type: string
+          description: Unique client-generated key. Reusing the same key prevents
+            accidental duplicate withdrawals.
+          maxLength: 128
+      required:
+      - amount
+      - destination_address
+      - idempotency_key
+    WithdrawalStatusEnum:
+      enum:
+      - pending
+      - processing
+      - completed
+      - failed
+      - cancelled
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `processing` - Processing
+        * `completed` - Completed
+        * `failed` - Failed
+        * `cancelled` - Cancelled
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+- name: Authentication
+  description: Google authentication and JWT token management.
+- name: Users
+  description: Authenticated user profile operations.
+- name: Wallets
+  description: Dedicated user blockchain deposit wallets.
+- name: Deposits
+  description: USDT BEP-20 deposits and confirmation status.
+- name: Transactions
+  description: Blockchain transaction history.

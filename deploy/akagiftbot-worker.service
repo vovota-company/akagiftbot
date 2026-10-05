@@ -1,0 +1,16 @@
+[Unit]
+Description=AkaGiftBot BSC deposit collector
+After=network.target
+
+[Service]
+Type=simple
+User=akagiftbot
+Group=akagiftbot
+WorkingDirectory=/opt/akagiftbot
+EnvironmentFile=/opt/akagiftbot/.env
+ExecStart=/opt/akagiftbot/.venv/bin/python manage.py monitor_deposits
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
