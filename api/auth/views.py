@@ -73,7 +73,7 @@ class GoogleLoginView(APIView):
                 "Google login request",
                 request_only=True,
                 value={
-                    "credential": "eyJhbGciOiJSUzI1NiIs..."
+                    "credential": "eyJhbGciOiJSUzI1NiIs...","referred_by": "Y9OD14",
                 },
             ),
             OpenApiExample(
@@ -106,8 +106,10 @@ class GoogleLoginView(APIView):
             serializer.validated_data["credential"]
         )
 
-        user, wallet = login_or_create_from_google(payload)
-
+        user, wallet = login_or_create_from_google(
+                 payload,
+                 referred_by_code=serializer.validated_data.get("referred_by"),
+        )
         access, refresh = tokens_for_user(user)
 
         return Response(

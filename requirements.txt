@@ -9,3 +9,4 @@ bip-utils>=2.9,<3.0
 web3>=7.14,<8.0
 cryptography>=45,<47
 gunicorn>=23,<24
+django-cors-headers

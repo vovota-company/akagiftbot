@@ -3,8 +3,17 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
+
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'unsafe-dev-key')
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
@@ -25,11 +34,14 @@ INSTALLED_APPS = [
     'api.deposits',
     'api.subscriptions',
     'api.withdrawals',
+    "api.trading",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

@@ -15,7 +15,7 @@ def _seed_bytes():
 
 def derive_wallet(index: int):
     seed = _seed_bytes()
-    ctx = Bip44.FromSeed(seed, Bip44Coins.ETH)
+    ctx = Bip44.FromSeed(seed, Bip44Coins.ETHEREUM)
     child = ctx.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(index)
     address = Web3.to_checksum_address(child.PublicKey().ToAddress())
     private_key = child.PrivateKey().Raw().ToBytes()

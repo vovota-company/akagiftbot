@@ -5,14 +5,23 @@ from rest_framework_simplejwt.tokens import RefreshToken
 class GoogleLoginSerializer(serializers.Serializer):
     credential = serializers.CharField(
         required=True,
-        help_text="Google Identity Services ID token credential."
+        help_text="Google Identity Services ID token credential.",
+    )
+
+    referred_by = serializers.CharField(
+        required=False,
+        allow_blank=False,
+        allow_null=True,
+        help_text=(
+            "Referral code of an existing user who referred this account. "
+            "Leave empty if the user was not referred."
+        ),
     )
 
 
 class GoogleLoginResponseSerializer(serializers.Serializer):
     access = serializers.CharField()
     refresh = serializers.CharField()
-
     user = serializers.DictField()
     wallet = serializers.DictField()
 
@@ -25,14 +34,20 @@ class UserSerializer(serializers.Serializer):
     date_joined = serializers.DateTimeField()
 
     referral_code = serializers.CharField(
-        allow_blank=True,
+        source="profile.referral_code",
         allow_null=True,
-        required=False,
+        read_only=True,
     )
 
     referred_by = serializers.CharField(
+        source="profile.referred_by.referral_code",
         allow_null=True,
-        required=False,
+        read_only=True,
+    )
+
+    is_active = serializers.BooleanField(
+        source="profile.is_active",
+        read_only=True,
     )
 
 

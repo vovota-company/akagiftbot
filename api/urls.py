@@ -10,6 +10,7 @@ from api.deposits.views import (
     TransactionListView,
 )
 from api.wallets.views import WalletView
+from api.trading.urls import urlpatterns as trading_urlpatterns
 
 
 urlpatterns = [
@@ -42,6 +43,11 @@ urlpatterns = [
         "transactions/",
         TransactionListView.as_view(),
         name="transactions",
+    ),
+
+    path(
+        "trading/",
+        include((trading_urlpatterns, "trading")),
     ),
 
     # Balance and withdrawals
